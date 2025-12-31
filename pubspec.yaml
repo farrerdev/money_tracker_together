@@ -13,6 +13,9 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   
+  # Utility
+  intl: ^0.19.0
+  
   # Firebase & Riverpod Dependencies
   firebase_core: ^3.6.0
   cloud_firestore: ^5.4.0

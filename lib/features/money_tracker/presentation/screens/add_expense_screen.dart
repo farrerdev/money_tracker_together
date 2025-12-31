@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/utils/currency_helper.dart';
+import '../../domain/entities/expense_transaction.dart';
 import '../../domain/entities/jar.dart';
 import '../providers/tracker_providers.dart';
+import 'package:intl/intl.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
-  const AddExpenseScreen({super.key});
+  // MỚI: Thêm transaction để biết là đang Sửa hay Thêm mới
+  final ExpenseTransaction? transaction;
+
+  const AddExpenseScreen({super.key, this.transaction});
 
   @override
   ConsumerState<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -13,104 +19,215 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
+  final _noteController = TextEditingController();
+  
   String? _selectedJarId;
   DateTime _selectedDate = DateTime.now();
+  
+  bool get _isEditing => widget.transaction != null;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (_isEditing) {
+      // Nếu là chế độ Sửa, điền thông tin cũ vào form
+      final t = widget.transaction!;
+      _amountController.text = CurrencyHelper.format(t.amount);
+      _noteController.text = t.note;
+      _selectedJarId = t.jarId;
+      _selectedDate = t.date;
+    } else {
+      // Nếu là Thêm mới, tự động chọn hũ gần nhất
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final lastUsedJarId = ref.read(lastUsedJarIdProvider);
+        if (lastUsedJarId != null) {
+          setState(() {
+            _selectedJarId = lastUsedJarId;
+          });
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Lắng nghe state để hiện loading hoặc báo lỗi
-    final state = ref.watch(addExpenseControllerProvider);
+    // Lắng nghe cả 2 controller
+    final addState = ref.watch(addExpenseControllerProvider);
+    final updateState = ref.watch(updateExpenseControllerProvider);
+    final isLoading = addState.isLoading || updateState.isLoading;
+    final hasError = addState.hasError || updateState.hasError;
+    final error = addState.hasError ? addState.error : updateState.error;
+
     final jarsAsync = ref.watch(jarsStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Thêm chi tiêu')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // 1. Chọn ngày
-              ListTile(
-                title: Text("Ngày: ${_selectedDate.toLocal().toString().split(' ')[0]}"),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) setState(() => _selectedDate = picked);
-                },
-              ),
-              
-              // 2. Nhập số tiền
-              TextFormField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Số tiền'),
-                validator: (value) {
-                  if (value == null || double.tryParse(value) == null) {
-                    return 'Vui lòng nhập số tiền hợp lệ';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // 3. Chọn Hũ (Load từ Riverpod)
-              jarsAsync.when(
-                data: (jars) {
-                  if (jars.isEmpty) {
-                    return const Text('Chưa có hũ nào. Hãy tạo hũ trước!');
-                  }
-                  return DropdownButtonFormField<String>(
-                    value: _selectedJarId,
-                    decoration: const InputDecoration(labelText: 'Chọn hũ chi tiêu'),
-                    items: jars.map((jar) {
-                      return DropdownMenuItem(
-                        value: jar.id,
-                        child: Text('${jar.name} (${jar.balance.toStringAsFixed(0)})'),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => _selectedJarId = value),
-                    validator: (val) => val == null ? 'Phải chọn hũ' : null,
-                  );
-                },
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Lỗi tải hũ: $e'),
-              ),
-
-              const Spacer(),
-
-              // 4. Submit Button
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: state.isLoading ? null : _submit,
-                  child: state.isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text('Lưu chi tiêu'),
-                ),
-              ),
-              
-              // Hiển thị lỗi nếu có
-              if (state.hasError)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    state.error.toString(),
-                    style: const TextStyle(color: Colors.red),
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Sửa chi tiêu' : 'Thêm chi tiêu'),
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        const Text('Số tiền chi tiêu', style: TextStyle(color: Colors.grey)),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _amountController,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.red),
+                          autofocus: !_isEditing, // Chỉ autofocus khi Thêm mới
+                          inputFormatters: [ThousandsSeparatorInputFormatter()],
+                          decoration: const InputDecoration(
+                            hintText: '0',
+                            border: InputBorder.none,
+                            suffixText: 'đ',
+                            suffixStyle: TextStyle(fontSize: 20, color: Colors.grey),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) return 'Nhập số tiền';
+                            final amount = CurrencyHelper.parse(value);
+                            if (amount <= 0) return 'Số tiền không hợp lệ';
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-            ],
+                
+                const SizedBox(height: 24),
+                const Text('Chi tiết giao dịch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+
+                // Chọn Hũ
+                jarsAsync.when(
+                  data: (jars) {
+                    return DropdownButtonFormField<String>(
+                      value: _selectedJarId,
+                      decoration: InputDecoration(
+                        labelText: 'Chọn hũ chi tiêu',
+                        prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                      ),
+                      items: jars.map((jar) {
+                        return DropdownMenuItem(
+                          value: jar.id,
+                          child: Text(jar.name),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedJarId = value;
+                        });
+                      },
+                      validator: (val) => val == null ? 'Vui lòng chọn hũ' : null,
+                    );
+                  },
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text('Lỗi tải danh sách hũ: $e'),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Nhập Nội dung
+                TextFormField(
+                  controller: _noteController,
+                  decoration: InputDecoration(
+                    labelText: 'Nội dung chi tiêu',
+                    hintText: 'Ví dụ: Ăn trưa, Đổ xăng...',
+                    prefixIcon: const Icon(Icons.edit_note),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                
+                const SizedBox(height: 16),
+
+                // Chọn Ngày
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) setState(() => _selectedDate = picked);
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Ngày chi tiêu',
+                      prefixIcon: const Icon(Icons.calendar_today_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                    ),
+                    child: Text(
+                      DateFormat('dd/MM/yyyy').format(_selectedDate),
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Nút Submit
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton(
+                    onPressed: isLoading ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: isLoading 
+                      ? const CircularProgressIndicator(color: Colors.white) 
+                      : Text(_isEditing ? 'LƯU THAY ĐỔI' : 'LƯU CHI TIÊU', 
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                
+                if (hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Center(
+                      child: Text(
+                        'Lỗi: $error',
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -119,14 +236,38 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
-      final success = await ref.read(addExpenseControllerProvider.notifier).addExpense(
-        jarId: _selectedJarId!,
-        amount: double.parse(_amountController.text),
-        date: _selectedDate,
-      );
+      FocusScope.of(context).unfocus();
+
+      final amount = CurrencyHelper.parse(_amountController.text);
+      final note = _noteController.text.trim();
+      
+      bool success = false;
+
+      if (_isEditing) {
+        // LOGIC SỬA
+        success = await ref.read(updateExpenseControllerProvider.notifier).updateExpense(
+          transactionId: widget.transaction!.id,
+          newJarId: _selectedJarId!,
+          newAmount: amount,
+          newDate: _selectedDate,
+          newNote: note,
+        );
+      } else {
+        // LOGIC THÊM MỚI
+        ref.read(lastUsedJarIdProvider.notifier).state = _selectedJarId;
+        success = await ref.read(addExpenseControllerProvider.notifier).addExpense(
+          jarId: _selectedJarId!,
+          amount: amount,
+          date: _selectedDate,
+          note: note,
+        );
+      }
 
       if (success && mounted) {
-        Navigator.pop(context); // Đóng màn hình khi thành công
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_isEditing ? 'Đã cập nhật chi tiêu!' : 'Đã thêm chi tiêu thành công!')),
+        );
+        Navigator.pop(context);
       }
     }
   }
