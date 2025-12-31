@@ -3,20 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/money_tracker/presentation/providers/tracker_providers.dart';
 import 'features/money_tracker/presentation/screens/home_screen.dart';
-// import 'firebase_options.dart'; // Uncomment this after running flutterfire configure
+import 'firebase_options.dart'; // Uncomment this after running flutterfire configure
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // TODO: Run 'flutterfire configure' to generate firebase_options.dart
-  // await Firebase.initializeApp(
-  //   options: DefaultFirebaseOptions.currentPlatform,
-  // );
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // For now, we might need a dummy Firebase initialization if we want to run without errors
   // but since we don't have the config, the app will crash if we try to use Firebase features.
   // The user MUST configure Firebase.
-  
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -42,7 +42,7 @@ class MyApp extends ConsumerWidget {
       title: 'Money Tracker Together',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        useMaterial3: true, 
+        useMaterial3: true,
         colorSchemeSeed: Colors.green,
         appBarTheme: const AppBarTheme(
           centerTitle: true,

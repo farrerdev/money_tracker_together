@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "252597819762",
+    "project_id": "money-tracker-together",
+    "storage_bucket": "money-tracker-together.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:252597819762:android:6068f2bc148008898ba5eb",
+        "android_client_info": {
+          "package_name": "com.example.money_tracker_together"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqU_ZYq68mIZtY6U6uIfQbRlmNlxnis-E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
