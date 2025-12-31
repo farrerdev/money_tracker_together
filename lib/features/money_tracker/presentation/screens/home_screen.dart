@@ -27,20 +27,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('Money Tracker'),
         centerTitle: false,
-        actions: [
-           userAsync.when(
-            data: (user) => Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: Chip(
-                avatar: Icon(Icons.circle, size: 12, color: user != null ? Colors.green : Colors.grey),
-                label: Text(user != null ? 'Online' : 'Offline'),
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              ),
-            ),
-            loading: () => const SizedBox.shrink(),
-            error: (_,__) => const SizedBox.shrink(),
-          )
-        ],
+
       ),
       
       body: IndexedStack(
@@ -193,14 +180,14 @@ class _HomeTab extends ConsumerWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isNegative 
-                    ? [Colors.red.shade700, Colors.red.shade500]
-                    : [Colors.blue.shade700, Colors.blue.shade500],
+                    ? [Colors.red.shade700, Colors.red.shade400]
+                    : [Colors.green.shade700, Colors.green.shade400],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
-                BoxShadow(color: (isNegative ? Colors.red : Colors.blue).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
+                BoxShadow(color: (isNegative ? Colors.red : Colors.green).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))
               ]
             ),
             child: Row(
