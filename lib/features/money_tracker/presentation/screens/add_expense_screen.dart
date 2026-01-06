@@ -7,7 +7,6 @@ import '../providers/tracker_providers.dart';
 import 'package:intl/intl.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
-  // MỚI: Thêm transaction để biết là đang Sửa hay Thêm mới
   final ExpenseTransaction? transaction;
 
   const AddExpenseScreen({super.key, this.transaction});
@@ -20,13 +19,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-  
-  // MỚI: FocusNode để quản lý focus thủ công
+
   final _amountFocusNode = FocusNode();
-  
+
   String? _selectedJarId;
   DateTime _selectedDate = DateTime.now();
-  
+
   bool get _isEditing => widget.transaction != null;
 
   @override
@@ -34,22 +32,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.initState();
 
     if (_isEditing) {
-      // Nếu là chế độ Sửa, điền thông tin cũ vào form
+      // Chế độ Sửa: điền thông tin cũ
       final t = widget.transaction!;
       _amountController.text = CurrencyHelper.format(t.amount);
       _noteController.text = t.note;
       _selectedJarId = t.jarId;
       _selectedDate = t.date;
     } else {
-      // Nếu là Thêm mới, tự động chọn hũ gần nhất
+      // Chế độ Thêm mới: chỉ cần request focus
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final lastUsedJarId = ref.read(lastUsedJarIdProvider);
-        if (lastUsedJarId != null) {
-          setState(() {
-            _selectedJarId = lastUsedJarId;
-          });
-        }
-        // MỚI: Request focus sau khi frame được vẽ để đảm bảo bàn phím hiện lên
         _amountFocusNode.requestFocus();
       });
     }
@@ -59,13 +50,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
-    _amountFocusNode.dispose(); // Đừng quên dispose focus node
+    _amountFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Lắng nghe cả 2 controller
     final addState = ref.watch(addExpenseControllerProvider);
     final updateState = ref.watch(updateExpenseControllerProvider);
     final isLoading = addState.isLoading || updateState.isLoading;
@@ -98,11 +88,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _amountController,
-                          focusNode: _amountFocusNode, // Gán FocusNode vào đây
+                          focusNode: _amountFocusNode,
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.red),
-                          // autofocus: !_isEditing, // Bỏ autofocus mặc định vì đã dùng FocusNode
                           inputFormatters: [ThousandsSeparatorInputFormatter()],
                           decoration: const InputDecoration(
                             hintText: '0',
@@ -121,7 +110,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
                 const Text('Chi tiết giao dịch', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
@@ -129,6 +118,34 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 // Chọn Hũ
                 jarsAsync.when(
                   data: (jars) {
+                    // MỚI: Logic tự động chọn hũ
+                    if (!_isEditing && _selectedJarId == null && jars.isNotEmpty) {
+                      String? jarToSelect;
+                      final lastUsedJarId = ref.read(lastUsedJarIdProvider);
+
+                      // 1. Ưu tiên hũ dùng gần nhất
+                      if (lastUsedJarId != null && jars.any((j) => j.id == lastUsedJarId)) {
+                        jarToSelect = lastUsedJarId;
+                      } else {
+                        // 2. Nếu không có, tìm hũ 'Ăn uống'
+                        try {
+                          jarToSelect = jars.firstWhere((j) => j.name.toLowerCase().contains('ăn uống')).id;
+                        } catch (e) {
+                          // 3. Nếu không có, chọn hũ đầu tiên
+                          jarToSelect = jars.first.id;
+                        }
+                      }
+
+                      // Cập nhật state an toàn sau khi build xong
+                      Future.microtask(() {
+                        if (mounted && _selectedJarId == null) {
+                          setState(() {
+                            _selectedJarId = jarToSelect;
+                          });
+                        }
+                      });
+                    }
+
                     return DropdownButtonFormField<String>(
                       value: _selectedJarId,
                       decoration: InputDecoration(
@@ -173,7 +190,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _submit(),
                 ),
-                
+
                 const SizedBox(height: 16),
 
                 // Chọn Ngày
@@ -215,13 +232,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       backgroundColor: Colors.red,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: isLoading 
-                      ? const CircularProgressIndicator(color: Colors.white) 
-                      : Text(_isEditing ? 'LƯU THAY ĐỔI' : 'LƯU CHI TIÊU', 
+                    child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(_isEditing ? 'LƯU THAY ĐỔI' : 'LƯU CHI TIÊU',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
-                
+
                 if (hasError)
                   Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -247,11 +264,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
       final amount = CurrencyHelper.parse(_amountController.text);
       final note = _noteController.text.trim();
-      
+
       bool success = false;
 
       if (_isEditing) {
-        // LOGIC SỬA
         success = await ref.read(updateExpenseControllerProvider.notifier).updateExpense(
           transactionId: widget.transaction!.id,
           newJarId: _selectedJarId!,
@@ -260,7 +276,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
           newNote: note,
         );
       } else {
-        // LOGIC THÊM MỚI
         ref.read(lastUsedJarIdProvider.notifier).state = _selectedJarId;
         success = await ref.read(addExpenseControllerProvider.notifier).addExpense(
           jarId: _selectedJarId!,
