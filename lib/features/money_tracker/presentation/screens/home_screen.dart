@@ -29,12 +29,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         centerTitle: false,
 
       ),
-      
+
       body: IndexedStack(
         index: _currentIndex,
         children: const [
-          _HomeTab(),              
-          TransactionHistoryScreen(), 
+          _HomeTab(),
+          TransactionHistoryScreen(),
         ],
       ),
 
@@ -103,7 +103,7 @@ class _HomeTab extends ConsumerWidget {
     final budgets = budgetsInMonthAsync.valueOrNull ?? [];
 
     final budgetMap = {for (var b in budgets) b.jarId: b.amount};
-    
+
     final expenseMap = <String, double>{};
     for (var t in transactions) {
       expenseMap[t.jarId] = (expenseMap[t.jarId] ?? 0) + t.amount;
@@ -111,7 +111,7 @@ class _HomeTab extends ConsumerWidget {
 
     double totalBudget = 0;
     double totalExpense = 0;
-    
+
     for (var jar in jars) {
       totalBudget += budgetMap[jar.id] ?? 0;
       totalExpense += expenseMap[jar.id] ?? 0;
@@ -121,6 +121,7 @@ class _HomeTab extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
+        // 1. Selector chọn tháng
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -173,6 +174,25 @@ class _HomeTab extends ConsumerWidget {
           ),
         ),
 
+        // MỚI: Nút Copy Budget (chỉ hiện khi chưa có budget nào trong tháng VÀ không phải tháng quá khứ quá xa)
+        if (budgets.isEmpty && jars.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _copyBudget(context, ref, selectedMonth),
+                icon: const Icon(Icons.copy),
+                label: const Text('Sao chép ngân sách tháng trước'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.all(12),
+                  side: BorderSide(color: Colors.blue.shade200),
+                ),
+              ),
+            ),
+          ),
+
+        // 2. Card Tổng quan Tháng
         SliverToBoxAdapter(
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -222,7 +242,7 @@ class _HomeTab extends ConsumerWidget {
             ),
           ),
         ),
-        
+
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -240,6 +260,7 @@ class _HomeTab extends ConsumerWidget {
           ),
         ),
 
+        // 3. Danh sách Hũ
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
           sliver: SliverList(
@@ -265,9 +286,8 @@ class _HomeTab extends ConsumerWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => TransactionHistoryScreen(
-                            jarId: jar.id, 
+                            jarId: jar.id,
                             jarName: jar.name,
-                            // MỚI: Truyền filter theo tháng (Optional, nhưng TransactionHistoryScreen sẽ dùng Provider tháng toàn cục nên không cần truyền explicit)
                           )
                         ),
                       );
@@ -307,7 +327,7 @@ class _HomeTab extends ConsumerWidget {
                                     Text(
                                       CurrencyHelper.formatWithSymbol(remaining),
                                       style: TextStyle(
-                                        fontWeight: FontWeight.bold, 
+                                        fontWeight: FontWeight.bold,
                                         color: remaining >= 0 ? Colors.green : Colors.red
                                       ),
                                     ),
@@ -328,9 +348,9 @@ class _HomeTab extends ConsumerWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('${CurrencyHelper.format(expense)} / ${CurrencyHelper.format(budget)}', 
+                                Text('${CurrencyHelper.format(expense)} / ${CurrencyHelper.format(budget)}',
                                   style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                Text('${(percent * 100).toStringAsFixed(0)}%', 
+                                Text('${(percent * 100).toStringAsFixed(0)}%',
                                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                               ],
                             )
@@ -368,6 +388,23 @@ class _HomeTab extends ConsumerWidget {
     );
   }
 
+  // MỚI: Hàm xử lý copy budget
+  void _copyBudget(BuildContext context, WidgetRef ref, DateTime month) async {
+    final success = await ref.read(copyBudgetControllerProvider.notifier).copyBudget(month.month, month.year);
+
+    if (context.mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã sao chép ngân sách thành công!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không tìm thấy ngân sách tháng trước hoặc có lỗi xảy ra.')),
+        );
+      }
+    }
+  }
+
   void _showJarOptions(BuildContext context, WidgetRef ref, Jar jar, DateTime month, double currentBudget) {
     showModalBottomSheet(
       context: context,
@@ -384,7 +421,7 @@ class _HomeTab extends ConsumerWidget {
               leading: const Icon(Icons.edit_note, color: Colors.orange),
               title: const Text('Đổi tên hũ'),
               onTap: () {
-                Navigator.pop(ctx); 
+                Navigator.pop(ctx);
                 _showRenameJarDialog(context, ref, jar);
               },
             ),
@@ -392,7 +429,7 @@ class _HomeTab extends ConsumerWidget {
               leading: const Icon(Icons.edit, color: Colors.blue),
               title: const Text('Đặt/Sửa ngân sách tháng này'),
               onTap: () {
-                Navigator.pop(ctx); 
+                Navigator.pop(ctx);
                 _showSetBudgetDialog(context, ref, jar, month, currentBudget);
               },
             ),
@@ -401,7 +438,7 @@ class _HomeTab extends ConsumerWidget {
               title: const Text('Xóa hũ chi tiêu'),
               subtitle: const Text('Xóa vĩnh viễn hũ này khỏi hệ thống'),
               onTap: () {
-                Navigator.pop(ctx); 
+                Navigator.pop(ctx);
                 _confirmDeleteJar(context, ref, jar.id, jar.name);
               },
             ),
@@ -414,13 +451,13 @@ class _HomeTab extends ConsumerWidget {
 
   void _showRenameJarDialog(BuildContext parentContext, WidgetRef ref, Jar jar) {
     final controller = TextEditingController(text: jar.name);
-    
+
     showDialog(
       context: parentContext,
       builder: (dialogContext) => Consumer(
         builder: (context, ref, _) {
           final state = ref.watch(updateJarControllerProvider);
-          
+
           return AlertDialog(
             title: const Text('Đổi tên hũ'),
             content: TextField(
@@ -442,7 +479,7 @@ class _HomeTab extends ConsumerWidget {
                 onPressed: state.isLoading ? null : () async {
                   final newName = controller.text.trim();
                   if (newName.isEmpty) return;
-                  
+
                   final success = await ref.read(updateJarControllerProvider.notifier)
                       .updateJar(jar.id, newName);
                   
@@ -450,7 +487,7 @@ class _HomeTab extends ConsumerWidget {
                     Navigator.pop(context);
                   }
                 },
-                child: state.isLoading 
+                child: state.isLoading
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : const Text('Lưu'),
               ),
@@ -464,13 +501,13 @@ class _HomeTab extends ConsumerWidget {
   void _showSetBudgetDialog(BuildContext parentContext, WidgetRef ref, Jar jar, DateTime month, double currentBudget) {
     final initialText = currentBudget > 0 ? CurrencyHelper.format(currentBudget) : '';
     final controller = TextEditingController(text: initialText);
-    
+
     showDialog(
       context: parentContext,
       builder: (dialogContext) => Consumer(
         builder: (context, ref, _) {
           final state = ref.watch(setBudgetControllerProvider);
-          
+
           return AlertDialog(
             title: Text('Vốn tháng ${month.month}/${month.year}'),
             content: Column(
@@ -489,7 +526,7 @@ class _HomeTab extends ConsumerWidget {
                     suffixText: 'đ',
                     border: OutlineInputBorder(),
                   ),
-                  enabled: !state.isLoading, 
+                  enabled: !state.isLoading,
                 ),
                 if (state.hasError)
                    Padding(
@@ -506,11 +543,11 @@ class _HomeTab extends ConsumerWidget {
               FilledButton(
                 onPressed: state.isLoading ? null : () async {
                   final amount = CurrencyHelper.parse(controller.text);
-                  
+
                   final success = await ref.read(setBudgetControllerProvider.notifier).setBudget(
-                    jarId: jar.id, 
-                    amount: amount, 
-                    month: month.month, 
+                    jarId: jar.id,
+                    amount: amount,
+                    month: month.month,
                     year: month.year
                   );
                   

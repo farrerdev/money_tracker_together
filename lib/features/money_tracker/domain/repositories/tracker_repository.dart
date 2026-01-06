@@ -19,7 +19,12 @@ abstract class TrackerRepository {
     required int year,
   });
 
-  // SỬA: Thay đổi hàm tạo hũ để nhận ngân sách tháng đầu tiên
+  // MỚI: Sao chép ngân sách từ tháng trước
+  Future<void> copyBudgetFromPreviousMonth({
+    required int currentMonth,
+    required int currentYear,
+  });
+
   Future<void> createJar({
     required String name,
     required double initialBudget,

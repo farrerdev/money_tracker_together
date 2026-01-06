@@ -12,13 +12,10 @@ class TrackerRepositoryImpl implements TrackerRepository {
 
   TrackerRepositoryImpl(this._firestore, this._auth);
 
-  // SỬA: Tự động đổi ID ví dựa trên môi trường chạy
   String get _userId {
     if (kDebugMode) {
-      // Môi trường Dev/Debug: Dùng ví nháp, thoải mái xóa sửa
       return "dev_wallet_testing"; 
     } else {
-      // Môi trường Production (App thật): Dùng ví chính
       return "shared_family_wallet";
     }
   }
@@ -137,6 +134,62 @@ class TrackerRepositoryImpl implements TrackerRepository {
     });
   }
 
+  // --- LOGIC MỚI: SAO CHÉP NGÂN SÁCH TỪ THÁNG TRƯỚC ---
+  @override
+  Future<void> copyBudgetFromPreviousMonth({
+    required int currentMonth,
+    required int currentYear,
+  }) async {
+    // 1. Xác định tháng trước
+    int prevMonth = currentMonth - 1;
+    int prevYear = currentYear;
+    if (prevMonth == 0) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+
+    // 2. Lấy toàn bộ budget của tháng trước
+    final prevBudgetsSnapshot = await _userDoc.collection('budgets')
+        .where('month', isEqualTo: prevMonth)
+        .where('year', isEqualTo: prevYear)
+        .get();
+
+    if (prevBudgetsSnapshot.docs.isEmpty) {
+      throw Exception("Không tìm thấy dữ liệu ngân sách của tháng trước ($prevMonth/$prevYear)");
+    }
+
+    final batch = _firestore.batch();
+    int count = 0;
+
+    for (var doc in prevBudgetsSnapshot.docs) {
+      final data = doc.data();
+      final jarId = data['jarId'];
+      final amount = (data['amount'] ?? 0).toDouble();
+
+      // 3. Tạo document ID mới cho tháng hiện tại
+      final newBudgetId = '${jarId}_${currentMonth}_$currentYear';
+      final newBudgetRef = _userDoc.collection('budgets').doc(newBudgetId);
+
+      // Chỉ copy nếu document chưa tồn tại (để tránh ghi đè dữ liệu user đã nhập tay)
+      // Nhưng trong batch write không check exist được, nên ta dùng set với merge: true hoặc cứ ghi đè nếu user đồng ý
+      // Ở đây ta dùng set, user bấm nút nghĩa là đồng ý copy đè.
+      
+      batch.set(newBudgetRef, {
+        'jarId': jarId,
+        'amount': amount,
+        'month': currentMonth,
+        'year': currentYear,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      count++;
+    }
+
+    if (count > 0) {
+      await batch.commit();
+    }
+  }
+  // -----------------------------------------------------
+
   @override
   Future<void> createJar({
     required String name,
@@ -146,15 +199,13 @@ class TrackerRepositoryImpl implements TrackerRepository {
   }) async {
     final batch = _firestore.batch();
 
-    // 1. Tạo document hũ mới
     final newJarRef = _userDoc.collection('jars').doc();
     batch.set(newJarRef, {
       'name': name,
-      'balance': 0, // Balance tích lũy luôn bắt đầu từ 0
+      'balance': 0, 
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // 2. Tạo document budget cho tháng hiện tại
     if (initialBudget > 0) {
       final budgetId = '${newJarRef.id}_${month}_$year';
       final budgetRef = _userDoc.collection('budgets').doc(budgetId);

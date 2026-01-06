@@ -105,7 +105,6 @@ class AddExpenseController extends AutoDisposeAsyncNotifier<void> {
 final addExpenseControllerProvider =
     AsyncNotifierProvider.autoDispose<AddExpenseController, void>(AddExpenseController.new);
 
-// SỬA: Cập nhật CreateJarController để nhận month, year và initialBudget
 class CreateJarController extends AutoDisposeAsyncNotifier<void> {
   @override
   FutureOr<void> build() {}
@@ -263,3 +262,28 @@ class UpdateExpenseController extends AutoDisposeAsyncNotifier<void> {
 
 final updateExpenseControllerProvider = 
     AsyncNotifierProvider.autoDispose<UpdateExpenseController, void>(UpdateExpenseController.new);
+
+// MỚI: Controller để Copy Budget từ tháng trước
+class CopyBudgetController extends AutoDisposeAsyncNotifier<void> {
+  @override
+  FutureOr<void> build() {}
+
+  Future<bool> copyBudget(int currentMonth, int currentYear) async {
+    state = const AsyncLoading();
+    try {
+      final repository = ref.read(trackerRepositoryProvider);
+      await repository.copyBudgetFromPreviousMonth(
+        currentMonth: currentMonth, 
+        currentYear: currentYear
+      );
+      state = const AsyncData(null);
+      return true;
+    } catch (e, stack) {
+      state = AsyncError(e, stack);
+      return false;
+    }
+  }
+}
+
+final copyBudgetControllerProvider = 
+    AsyncNotifierProvider.autoDispose<CopyBudgetController, void>(CopyBudgetController.new);
