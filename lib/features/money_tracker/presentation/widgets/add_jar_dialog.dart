@@ -24,7 +24,6 @@ class _AddJarDialogState extends ConsumerState<AddJarDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Lắng nghe trạng thái của CreateJarController để hiện loading
     final state = ref.watch(createJarControllerProvider);
 
     return AlertDialog(
@@ -34,9 +33,9 @@ class _AddJarDialogState extends ConsumerState<AddJarDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Input Tên hũ
             TextFormField(
               controller: _nameController,
+              autofocus: true, // Tự động focus vào đây
               decoration: const InputDecoration(
                 labelText: 'Tên hũ',
                 hintText: 'Ví dụ: Ăn uống, Tiết kiệm',
@@ -52,25 +51,18 @@ class _AddJarDialogState extends ConsumerState<AddJarDialog> {
             ),
             const SizedBox(height: 16),
             
-            // Input Số dư ban đầu
             TextFormField(
               controller: _balanceController,
               decoration: const InputDecoration(
-                labelText: 'Số dư ban đầu',
+                labelText: 'Vốn tháng này', 
                 hintText: '0',
                 suffixText: 'đ',
                 prefixIcon: Icon(Icons.account_balance_wallet_outlined),
               ),
               keyboardType: TextInputType.number,
               inputFormatters: [
-                ThousandsSeparatorInputFormatter(), // Tự động thêm dấu chấm
+                ThousandsSeparatorInputFormatter(),
               ],
-              validator: (value) {
-                if (value == null || value.isEmpty) return null; // Cho phép rỗng (mặc định 0)
-                // Parse thử xem có hợp lệ không
-                // Vì input có dấu chấm, cần parse bằng CurrencyHelper
-                return null; 
-              },
             ),
             
             if (state.hasError)
@@ -106,12 +98,17 @@ class _AddJarDialogState extends ConsumerState<AddJarDialog> {
   Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
       final name = _nameController.text.trim();
-      
-      // Parse số tiền từ chuỗi có định dạng (1.000.000 -> 1000000.0)
       final balance = CurrencyHelper.parse(_balanceController.text);
 
-      final success = await ref.read(createJarControllerProvider.notifier)
-          .createJar(name, balance);
+      // Lấy tháng/năm đang chọn từ provider
+      final selectedMonth = ref.read(selectedMonthProvider);
+
+      final success = await ref.read(createJarControllerProvider.notifier).createJar(
+        name: name, 
+        initialBudget: balance,
+        month: selectedMonth.month,
+        year: selectedMonth.year,
+      );
 
       if (success && mounted) {
         Navigator.pop(context);

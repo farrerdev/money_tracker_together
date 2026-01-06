@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart'; // Import để dùng kDebugMode
 import '../../domain/entities/jar.dart';
 import '../../domain/entities/expense_transaction.dart';
 import '../../domain/entities/jar_budget.dart';
@@ -11,7 +12,17 @@ class TrackerRepositoryImpl implements TrackerRepository {
 
   TrackerRepositoryImpl(this._firestore, this._auth);
 
-  String get _userId => "shared_family_wallet";
+  // SỬA: Tự động đổi ID ví dựa trên môi trường chạy
+  String get _userId {
+    if (kDebugMode) {
+      // Môi trường Dev/Debug: Dùng ví nháp, thoải mái xóa sửa
+      return "dev_wallet_testing"; 
+    } else {
+      // Môi trường Production (App thật): Dùng ví chính
+      return "shared_family_wallet";
+    }
+  }
+
   DocumentReference get _userDoc => _firestore.collection('users').doc(_userId);
 
   @override
@@ -127,12 +138,36 @@ class TrackerRepositoryImpl implements TrackerRepository {
   }
 
   @override
-  Future<void> createJar(String name, double initialBalance) async {
-    await _userDoc.collection('jars').add({
+  Future<void> createJar({
+    required String name,
+    required double initialBudget,
+    required int month,
+    required int year,
+  }) async {
+    final batch = _firestore.batch();
+
+    // 1. Tạo document hũ mới
+    final newJarRef = _userDoc.collection('jars').doc();
+    batch.set(newJarRef, {
       'name': name,
-      'balance': initialBalance, 
+      'balance': 0, // Balance tích lũy luôn bắt đầu từ 0
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    // 2. Tạo document budget cho tháng hiện tại
+    if (initialBudget > 0) {
+      final budgetId = '${newJarRef.id}_${month}_$year';
+      final budgetRef = _userDoc.collection('budgets').doc(budgetId);
+      batch.set(budgetRef, {
+        'jarId': newJarRef.id,
+        'amount': initialBudget,
+        'month': month,
+        'year': year,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
   }
 
   @override
@@ -199,7 +234,6 @@ class TrackerRepositoryImpl implements TrackerRepository {
     });
   }
 
-  // --- LOGIC MỚI: CẬP NHẬT CHI TIÊU ---
   @override
   Future<void> updateExpense({
     required String transactionId,
@@ -211,7 +245,6 @@ class TrackerRepositoryImpl implements TrackerRepository {
     final transactionRef = _userDoc.collection('transactions').doc(transactionId);
 
     await _firestore.runTransaction((transaction) async {
-      // 1. Lấy thông tin giao dịch cũ
       final oldTransactionSnapshot = await transaction.get(transactionRef);
       if (!oldTransactionSnapshot.exists) {
         throw Exception("Giao dịch không tồn tại để cập nhật!");
@@ -221,15 +254,12 @@ class TrackerRepositoryImpl implements TrackerRepository {
       final oldJarId = oldData['jarId'] as String;
       final oldAmount = (oldData['amount'] ?? 0).toDouble();
 
-      // 2. Hoàn tiền cho hũ cũ
       final oldJarRef = _userDoc.collection('jars').doc(oldJarId);
       transaction.update(oldJarRef, {'balance': FieldValue.increment(oldAmount)});
 
-      // 3. Trừ tiền ở hũ mới
       final newJarRef = _userDoc.collection('jars').doc(newJarId);
       transaction.update(newJarRef, {'balance': FieldValue.increment(-newAmount)});
 
-      // 4. Cập nhật lại thông tin giao dịch
       transaction.update(transactionRef, {
         'jarId': newJarId,
         'amount': newAmount,
@@ -257,7 +287,8 @@ class TrackerRepositoryImpl implements TrackerRepository {
       final jarSnapshot = await transaction.get(jarRef);
 
       if (jarSnapshot.exists) {
-        transaction.update(jarRef, {'balance': FieldValue.increment(amount)});
+        final currentBalance = (jarSnapshot.data() as Map<String, dynamic>)['balance'] ?? 0.0;
+        transaction.update(jarRef, {'balance': currentBalance + amount});
       }
 
       transaction.delete(transactionRef);

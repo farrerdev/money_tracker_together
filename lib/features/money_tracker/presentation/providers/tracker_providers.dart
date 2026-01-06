@@ -105,15 +105,26 @@ class AddExpenseController extends AutoDisposeAsyncNotifier<void> {
 final addExpenseControllerProvider =
     AsyncNotifierProvider.autoDispose<AddExpenseController, void>(AddExpenseController.new);
 
+// SỬA: Cập nhật CreateJarController để nhận month, year và initialBudget
 class CreateJarController extends AutoDisposeAsyncNotifier<void> {
   @override
   FutureOr<void> build() {}
 
-  Future<bool> createJar(String name, double initialBalance) async {
+  Future<bool> createJar({
+    required String name, 
+    required double initialBudget,
+    required int month,
+    required int year,
+  }) async {
     state = const AsyncLoading();
     try {
       final repository = ref.read(trackerRepositoryProvider);
-      await repository.createJar(name, initialBalance);
+      await repository.createJar(
+        name: name, 
+        initialBudget: initialBudget,
+        month: month,
+        year: year,
+      );
       state = const AsyncData(null);
       return true;
     } catch (e, stack) {
@@ -220,7 +231,6 @@ class SetBudgetController extends AutoDisposeAsyncNotifier<void> {
 final setBudgetControllerProvider = 
     AsyncNotifierProvider.autoDispose<SetBudgetController, void>(SetBudgetController.new);
 
-// MỚI: Controller để Update Chi tiêu
 class UpdateExpenseController extends AutoDisposeAsyncNotifier<void> {
   @override
   FutureOr<void> build() {}

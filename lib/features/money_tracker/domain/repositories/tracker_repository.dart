@@ -19,8 +19,16 @@ abstract class TrackerRepository {
     required int year,
   });
 
-  Future<void> createJar(String name, double initialBalance);
+  // SỬA: Thay đổi hàm tạo hũ để nhận ngân sách tháng đầu tiên
+  Future<void> createJar({
+    required String name,
+    required double initialBudget,
+    required int month,
+    required int year,
+  });
+  
   Future<void> updateJar(String jarId, String name);
+  
   Future<void> deleteJar(String jarId);
   
   Future<void> addExpense({
@@ -30,7 +38,6 @@ abstract class TrackerRepository {
     String? note,
   });
 
-  // MỚI: Cập nhật một chi tiêu
   Future<void> updateExpense({
     required String transactionId,
     required String newJarId,
