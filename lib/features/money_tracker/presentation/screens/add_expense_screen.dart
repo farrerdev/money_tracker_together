@@ -21,6 +21,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   
+  // MỚI: FocusNode để quản lý focus thủ công
+  final _amountFocusNode = FocusNode();
+  
   String? _selectedJarId;
   DateTime _selectedDate = DateTime.now();
   
@@ -46,6 +49,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             _selectedJarId = lastUsedJarId;
           });
         }
+        // MỚI: Request focus sau khi frame được vẽ để đảm bảo bàn phím hiện lên
+        _amountFocusNode.requestFocus();
       });
     }
   }
@@ -54,6 +59,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   void dispose() {
     _amountController.dispose();
     _noteController.dispose();
+    _amountFocusNode.dispose(); // Đừng quên dispose focus node
     super.dispose();
   }
 
@@ -92,10 +98,11 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _amountController,
+                          focusNode: _amountFocusNode, // Gán FocusNode vào đây
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.red),
-                          autofocus: !_isEditing, // Chỉ autofocus khi Thêm mới
+                          // autofocus: !_isEditing, // Bỏ autofocus mặc định vì đã dùng FocusNode
                           inputFormatters: [ThousandsSeparatorInputFormatter()],
                           decoration: const InputDecoration(
                             hintText: '0',
